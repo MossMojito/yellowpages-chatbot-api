@@ -1,21 +1,34 @@
+import os
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-import os
-from langchain_openai import ChatOpenAI, OpenAIEmbeddings
+from langchain_core.prompts import PromptTemplate
 from langchain_community.vectorstores import FAISS
-from langchain.memory import ConversationBufferWindowMemory
-from langchain.prompts import PromptTemplate
-from langchain.chains import LLMChain
+from langchain_openai import OpenAIEmbeddings, ChatOpenAI
+from langchain_classic.memory import ConversationBufferWindowMemory
 
-app = Flask(__name__)
-CORS(app)
+# ==========================================
+# Configuration
+# ==========================================
 
-# Initialize OpenAI
+# Get OpenAI API key from environment variable
 OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
-llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.3, api_key=OPENAI_API_KEY)
-embeddings = OpenAIEmbeddings(model="text-embedding-3-small", api_key=OPENAI_API_KEY)
+if not OPENAI_API_KEY:
+    raise ValueError("OPENAI_API_KEY environment variable is required!")
 
-# Load FAISS vectorstore
+# Initialize LLM
+llm = ChatOpenAI(
+    model="gpt-4o-mini",
+    temperature=0.7,
+    openai_api_key=OPENAI_API_KEY
+)
+
+# Initialize Embeddings
+embeddings = OpenAIEmbeddings(
+    model="text-embedding-3-small",
+    openai_api_key=OPENAI_API_KEY
+)
+
+# Load FAISS vectorstore from disk
 vectorstore_path = os.path.join(os.path.dirname(__file__), "yellowpages_vectorstore")
 vectorstore = FAISS.load_local(
     vectorstore_path,
@@ -23,191 +36,287 @@ vectorstore = FAISS.load_local(
     allow_dangerous_deserialization=True
 )
 
-# Initialize memory
-memory = ConversationBufferWindowMemory(k=3, return_messages=True)
+# Initialize Memory
+memory = ConversationBufferWindowMemory(
+    memory_key="chat_history",
+    k=3,  # Remember last 3 exchanges
+    return_messages=True,
+    input_key="input",
+    output_key="output"
+)
 
-# Router Agent
-def route_query(query):
-    """Classify user intent"""
-    router_prompt = PromptTemplate(
-        input_variables=["query"],
-        template="""คุณเป็น Query Router สำหรับระบบค้นหาสถานที่ออกกำลังกาย
-        
-ประเภทคำถาม:
-1. business_search: ถ้าถามหา/ต้องการสถานที่เฉพาะ (มีชื่อสถานที่, ทำเล, ประเภทกีฬา)
-2. knowledge: ถ้าถามเกี่ยวกับกีฬาทั่วไป (ประโยชน์, วิธีเล่น, ความรู้)
-3. exploration: ถ้าถาม "มีอะไรบ้าง", "แนะนำหน่อย"
-4. out_of_scope: ถ้าไม่เกี่ยวกับกีฬาหรือสถานที่เลย
+print("✅ Configuration loaded!")
+print(f"🤖 LLM: {llm.model_name}")
+print(f"📊 Vectorstore: {vectorstore.index.ntotal} vectors")
 
-คำถาม: {query}
+# ==========================================
+# Agent Functions
+# ==========================================
 
-ตอบเพียง: business_search, knowledge, exploration, หรือ out_of_scope"""
-    )
+def query_router(user_query: str, chat_history: str = "") -> str:
+    """
+    Agent that decides query type based on user intent.
+    """
     
-    chain = LLMChain(llm=llm, prompt=router_prompt)
-    route = chain.run(query=query).strip().lower()
-    return route
+    prompt = f"""You are a query classifier for a sports facility chatbot.
 
-# Business Search Agent
-def search_business(query):
-    """Search for sports facilities"""
-    # Get chat history
-    history = memory.load_memory_variables({})
-    context = history.get('history', '')
+Conversation history:
+{chat_history}
+
+Current query: "{user_query}"
+
+Classify into ONE category:
+
+1. business_search
+   - User wants to FIND/LOCATE businesses or places
+   - Examples: "find gym", "swimming pools near me", "show me yoga studios"
+   
+2. sports_knowledge  
+   - User wants INFORMATION/ADVICE about sports or fitness
+   - Examples: "how to swim better", "benefits of yoga", "muay thai for beginners"
+   
+3. out_of_scope
+   - NOT related to sports or fitness at all
+   - Examples: "weather today", "cook pasta", "stock prices"
+
+Consider the conversation history for context.
+
+Return ONLY ONE WORD: business_search, sports_knowledge, or out_of_scope
+"""
     
-    # Check if query uses pronouns (refers to previous context)
-    pronoun_keywords = ['ที่แรก', 'ที่สอง', 'ที่สาม', 'ที่นี่', 'ที่นั่น', 'แห่งนั้น', 'แห่งนี้']
-    uses_pronoun = any(kw in query for kw in pronoun_keywords)
+    response = llm.invoke(prompt)
+    return response.content.strip().lower()
+
+
+def business_search_agent(query: str, chat_history: str = "") -> str:
+    """
+    Conversational business search - talks like a human!
+    """
     
-    if uses_pronoun and context:
-        # Use context from memory
-        search_query = f"{context}\n{query}"
-    else:
-        # Fresh search
-        search_query = query
+    # Extract search context
+    context_prompt = f"""Based on conversation history:
+{chat_history}
+
+Current query: "{query}"
+
+Extract:
+1. Location mentioned (city, area, district)
+2. Sport/activity type
+3. Any other requirements
+
+Return as: location: X, sport: Y, requirements: Z
+If nothing mentioned, say: none
+"""
     
-    # Search vectorstore
-    results = vectorstore.similarity_search(search_query, k=10)
+    context_info = llm.invoke(context_prompt).content
+    print(f"📍 Context: {context_info}")
     
-    # Location validation
-    location_keywords = ['กรุงเทพ', 'bangkok', 'นนทบุรี', 'ปทุมธานี', 'สมุทรปราการ']
-    filtered_results = []
+    # Enhanced search query
+    search_query = f"{query} {context_info}"
     
-    for r in results:
-        metadata = r.metadata
-        address = metadata.get('address', '').lower()
-        
-        # Check if location matches
-        if any(loc in query.lower() for loc in location_keywords):
-            if any(loc in address for loc in location_keywords):
-                filtered_results.append(r)
-        else:
-            filtered_results.append(r)
+    # Search database
+    results = vectorstore.similarity_search(search_query, k=5)
     
-    # If no results after filtering, use original
-    if not filtered_results:
-        filtered_results = results[:3]
-    else:
-        filtered_results = filtered_results[:3]
-    
-    # Format results
-    if not filtered_results:
+    if not results:
         return "ขออภัยค่ะ ยังไม่มีข้อมูลในระบบ 🙏"
     
-    response = f"สวัสดีค่ะ! 😊 ดิฉันมีคำแนะนำสถานที่ออกกำลังกายให้ค่ะ:\n\n"
-    
-    for idx, doc in enumerate(filtered_results, 1):
+    # Format results
+    results_text = ""
+    for i, doc in enumerate(results, 1):
         m = doc.metadata
-        response += f"{idx}. **{m.get('name', 'N/A')}**\n"
-        response += f"   ตั้งอยู่ที่ {m.get('address', 'N/A')} ค่ะ\n"
-        if m.get('tel'):
-            response += f"   โทร {m.get('tel')} ค่ะ\n"
-        response += "\n"
+        results_text += f"""
+{i}. {m.get('name', 'N/A')}
+   ตั้งอยู่ที่ {m.get('address', 'N/A')} 
+   โทร {m.get('phone', 'N/A')}
+   
+"""
     
-    response += "หากคุณต้องการรายละเอียดเพิ่มเติมหรือมีคำถามอื่น สามารถถามดิฉันได้เลยนะคะ 💪✨"
+    # Natural response
+    natural_response_prompt = f"""User asked: "{query}"
+
+Conversation history:
+{chat_history}
+
+Search results:
+{results_text}
+
+Write a warm, conversational Thai response like a helpful female assistant:
+**IMPORTANT: Use female Thai politeness - use "ค่ะ" NOT "ครับ"**
+
+1. Acknowledge their request naturally
+2. Present the businesses in a friendly way
+3. Offer to help with more details
+4. Be natural and conversational
+
+Include the business details but make it flow naturally.
+"""
     
+    response = llm.invoke(natural_response_prompt).content
     return response
 
-# Knowledge Agent
-def answer_knowledge(query):
-    """Answer general sports questions"""
-    knowledge_prompt = PromptTemplate(
-        input_variables=["query"],
-        template="""คุณเป็นผู้เชี่ยวชาญด้านกีฬาและการออกกำลังกาย ตอบคำถามเป็นภาษาไทย
-        
-คำถาม: {query}
 
-ตอบแบบเป็นกันเอง ใช้ "ค่ะ" สั้นๆ กระชับ ไม่เกิน 5 ประโยค"""
+def sports_knowledge_agent(query: str, chat_history: str = "") -> str:
+    """
+    Agent that provides sports/fitness advice using LLM knowledge.
+    """
+    
+    prompt = f"""You are a knowledgeable female sports and fitness expert.
+
+**IMPORTANT: Respond as female - use "ค่ะ" NOT "ครับ"**
+
+Conversation history:
+{chat_history}
+
+User question: "{query}"
+
+Provide helpful, practical advice:
+- Clear, actionable information
+- 3-5 key points
+- Keep it concise (150-200 words)
+- Be encouraging and supportive
+- Use female Thai politeness (ค่ะ)
+
+If relevant, mention that they can find facilities/trainers in our database.
+"""
+    
+    response = llm.invoke(prompt)
+    knowledge = response.content
+    
+    # Check if we should also suggest businesses
+    suggest_prompt = f"""User asked: "{query}"
+
+Should I also suggest relevant sports facilities/businesses?
+Answer ONLY: yes or no
+"""
+    
+    should_suggest = llm.invoke(suggest_prompt).content.strip().lower()
+    
+    if "yes" in should_suggest:
+        # Add business suggestions
+        businesses = business_search_agent(query, chat_history)
+        knowledge += f"\n\n---\n\n**สถานที่ที่แนะนำค่ะ:**\n\n{businesses}"
+    
+    return knowledge
+
+
+def out_of_scope_agent(query: str) -> str:
+    """
+    Agent that politely handles non-sports queries.
+    """
+    
+    prompt = f"""User asked something not related to sports: "{query}"
+
+You are a female assistant.
+**IMPORTANT: Use "ค่ะ" (female) NOT "ครับ"**
+
+Write a brief, friendly response that:
+1. Politely declines to answer
+2. Reminds them you specialize in sports/fitness
+3. Suggests what you CAN help with
+
+Keep it friendly and short (2-3 sentences).
+Female Thai tone with "ค่ะ"!
+"""
+    
+    response = llm.invoke(prompt)
+    return response.content
+
+
+def polish_response(raw_response: str, user_query: str, chat_history: str = "") -> str:
+    """
+    Makes responses more natural and conversational
+    """
+    
+    prompt = f"""You are a friendly sports facility assistant.
+
+**IMPORTANT: Use "ค่ะ" (female politeness) NOT "ครับ"**
+
+Conversation history:
+{chat_history}
+
+User asked: "{user_query}"
+
+Raw response: {raw_response}
+
+Rewrite this to be:
+1. More natural and conversational
+2. Warm and friendly
+3. Helpful and engaging
+4. Like talking to a real female person
+5. Use "ค่ะ" consistently
+
+Keep all the factual information but make it sound human and female!
+"""
+    
+    polished = llm.invoke(prompt).content
+    return polished
+
+
+def chatbot(user_input: str) -> str:
+    """
+    CONVERSATIONAL multi-agent chatbot - talks like a human!
+    """
+    
+    # Get history
+    history = memory.load_memory_variables({})
+    chat_history = ""
+    
+    if history.get('chat_history'):
+        for msg in history['chat_history']:
+            chat_history += f"{msg.type}: {msg.content}\n"
+    
+    print(f"💭 User: {user_input}")
+    print(f"🧠 Memory: {len(history.get('chat_history', []))} messages")
+    
+    # Route query
+    query_type = query_router(user_input, chat_history)
+    print(f"🎯 Route: {query_type}")
+    
+    # Execute agent
+    if query_type == "business_search":
+        print("🔍 Agent: Business Search (Conversational RAG)")
+        response = business_search_agent(user_input, chat_history)
+        
+    elif query_type == "sports_knowledge":
+        print("🧠 Agent: Sports Knowledge (LLM)")
+        response = sports_knowledge_agent(user_input, chat_history)
+        
+    elif query_type == "out_of_scope":
+        print("⚠️ Agent: Out-of-Scope")
+        response = out_of_scope_agent(user_input)
+        
+    else:
+        response = "I'm not sure how to help with that. Could you rephrase?"
+    
+    # Polish response for naturalness
+    response = polish_response(response, user_input, chat_history)
+    
+    # Save to memory
+    memory.save_context(
+        {"input": user_input},
+        {"output": response}
     )
     
-    chain = LLMChain(llm=llm, prompt=knowledge_prompt)
-    response = chain.run(query=query)
-    return response
-
-# Exploration Agent
-def explore_categories():
-    """Show available categories"""
-    response = """สวัสดีค่ะ! 😊 เรามีสถานที่ออกกำลังกายหลากหลายประเภทให้เลือกค่ะ:
-
-🏃‍♀️ **ยอดนิยม:**
-- โยคะ (Yoga)
-- ฟิตเนส (Fitness Center)
-- มวยไทย (Muay Thai)
-
-⚽ **กีฬาทีม:**
-- ฟุตบอล (Football)
-- แบดมินตัน (Badminton)
-- วอลเลย์บอล (Volleyball)
-
-🏊‍♂️ **กีฬาน้ำ:**
-- สระว่ายน้ำ (Swimming Pool)
-
-🎯 **อื่นๆ:**
-- เทนนิส, กอล์ฟ, ยิงปืน, ปีนหน้าผา
-
-คุณสนใจประเภทไหนคะ? หรือจะระบุทำเลที่ต้องการเลยก็ได้ค่ะ! 💪"""
+    print("💾 Saved to memory")
+    print("="*60)
     
     return response
 
-# Out of Scope Agent
-def handle_out_of_scope():
-    """Handle unrelated queries"""
-    return """ขออภัยค่ะ 🙏 ดิฉันเป็นผู้ช่วยค้นหาสถานที่ออกกำลังกายและกีฬาเท่านั้นค่ะ 
-    
-คุณสามารถถามดิฉันเกี่ยวกับ:
-- สถานที่ออกกำลังกาย (โยคะ, ฟิตเนส, สระว่ายน้ำ)
-- ประโยชน์ของกีฬาแต่ละประเภท
-- คำแนะนำสถานที่ในพื้นที่ต่างๆ
 
-มีอะไรให้ช่วยเหลือเกี่ยวกับกีฬาไหมคะ? 😊"""
+# ==========================================
+# Flask API
+# ==========================================
 
-# Response Polish Agent
-def polish_response(response, query):
-    """Make response more natural"""
-    # Add emojis and friendly tone
-    if "ยังไม่มีข้อมูล" not in response:
-        # Already polished in individual agents
-        return response
-    return response
+app = Flask(__name__)
+CORS(app)
 
-# Main Chatbot Function
-def chatbot(user_message):
-    """Main chatbot orchestrator"""
-    try:
-        # Route query
-        route = route_query(user_message)
-        
-        # Execute appropriate agent
-        if 'business' in route:
-            response = search_business(user_message)
-        elif 'knowledge' in route:
-            response = answer_knowledge(user_message)
-        elif 'exploration' in route:
-            response = explore_categories()
-        else:
-            response = handle_out_of_scope()
-        
-        # Polish response
-        final_response = polish_response(response, user_message)
-        
-        # Save to memory
-        memory.save_context(
-            {"input": user_message},
-            {"output": final_response}
-        )
-        
-        return final_response
-        
-    except Exception as e:
-        return f"ขออภัยค่ะ เกิดข้อผิดพลาด: {str(e)} 🙏"
-
-# API Routes
 @app.route('/', methods=['GET'])
 def health():
     return jsonify({
         'status': 'Chatbot API is running!',
         'service': 'Yellow Pages Sports Chatbot',
-        'version': '1.0'
+        'version': '1.0',
+        'vectorstore_size': vectorstore.index.ntotal
     })
 
 @app.route('/chat', methods=['POST'])
@@ -225,6 +334,7 @@ def chat():
         return jsonify({'response': response})
     
     except Exception as e:
+        print(f"Error: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
