@@ -70,3 +70,32 @@ Render offers a generous free tier for web services.
       -H "Content-Type: application/json" \
       -d '{"message": "หาโยคะในกรุงเทพ"}'
     ```
+
+## 💻 Frontend (React + Vite)
+
+The frontend is located in the `frontend/` directory.
+
+1.  **Navigate to folder**:
+    ```bash
+    cd frontend
+    ```
+2.  **Install dependencies**:
+    ```bash
+    npm install
+    # or
+    bun install
+    ```
+3.  **Run Locally**:
+    ```bash
+    npm run dev
+    ```
+    The app will open at `http://localhost:8080` (or similar).
+
+## 🚀 Deployment
+
+### Backend (Render)
+Already configured via `render.yaml`. Connect your repo to Render and it will auto-deploy.
+- **Live URL**: `https://yellowpages-chatbot-api.onrender.com`
+
+### Frontend (Vercel/Netlify/Lovable)
+You can deploy the `frontend/` folder to Vercel, Netlify, or publish directly from Lovable.
