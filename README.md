@@ -40,6 +40,7 @@ Render offers a generous free tier for web services.
 │   ├── raw/                 # Original Excel data
 │   └── vectorstore/         # FAISS Vector Index
 ├── frontend/                # React/Lovable Frontend Application
+├── scraper/                 # (Ep 1) YellowPages Scraper
 ├── run.py                   # Application Entry Point
 ├── Procfile                 # Deployment Config
 └── requirements.txt         # Dependencies
@@ -90,6 +91,11 @@ The frontend is located in the `frontend/` directory.
     npm run dev
     ```
     The app will open at `http://localhost:3000` (or similar).
+
+## 🕷️ Scraper (Episode 1)
+
+The logic for collecting the data is in the `scraper/` directory.
+This enables the project to fetch fresh data from YellowPages to update the AI's knowledge base.
 
 ## 🚀 Deployment
 

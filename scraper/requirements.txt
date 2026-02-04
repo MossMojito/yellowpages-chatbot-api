@@ -1,0 +1,6 @@
+crawl4ai
+openai
+pandas
+requests
+beautifulsoup4
+lxml
