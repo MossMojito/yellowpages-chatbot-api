@@ -1,150 +1,270 @@
 # Web Scraping Chatbot RAG
 
-Professional modular Flask API for the Sports Chatbot.
+A production-ready RAG (Retrieval-Augmented Generation) chatbot for searching Thai businesses. Built with Flask, LangChain, FAISS, and GPT-4o.
+
+**Live Demo:** [Your Lovable URL here]
+
+---
 
 ## 🏗️ System Architecture
 
-The project follows a modern **RAG (Retrieval-Augmented Generation)** architecture, split into three main pipelines:
+The project follows a modular **RAG architecture** split into three pipelines:
+
+### 1. Data Pipeline (Scraper)
+* **Engine**: Python 3.11 + Playwright (`crawl4ai`)
+* **Function**: Scrapes YellowPages Thailand for business data
+* **Output**: Structured CSV files → Vector embeddings → FAISS index
+
+### 2. Backend (Flask + LangChain)
+* **Router Agent**: Classifies user intent (Business Search / Chitchat / Knowledge)
+* **RAG Engine**: Retrieves relevant businesses from FAISS, generates responses with GPT-4o
+* **API**: RESTful endpoints for frontend communication
+
+### 3. Frontend (React + TypeScript)
+* **Built with**: [Lovable.dev](https://lovable.dev) - AI-powered frontend generator
+* **Stack**: React 18 + Vite + TypeScript + Tailwind CSS + Shadcn/UI
+* **Features**: Real-time chat, responsive design, premium UI components
 
 ```mermaid
 graph TD
-    subgraph DataPipeline [Ep 1: Data Ingestion]
-        Scraper["🕷️ Scraper\n(Python 3.11 + Playwright)"] -->|Extracts| CSV["Raw Data\n(.csv)"]
-        CSV -->|Processed by| Embedder["🧠 Embedding Model"]
-        Embedder -->|Indexed into| FAISS[("🗄️ Vector Database\nFAISS/Chroma")]
+    subgraph DataPipeline [Episode 1: Data Ingestion]
+        Scraper["🕷️ Scraper"] -->|Extracts| CSV["Business Data"]
+        CSV -->|Embeddings| FAISS[("🗄️ FAISS Vector DB")]
     end
 
-    subgraph Application [Ep 2: RAG Application]
-        User(("👤 User")) <-->|Stunning UI| Frontend["💻 Frontend\n(React + Vite)"]
-        Frontend <-->|API Request| Backend["⚙️ Backend API\n(Flask + LangChain)"]
-        Backend <-->|Retrieve Context| FAISS
-        Backend <-->|Generate Answer| LLM["🤖 AI Model\n(GPT-4o)"]
+    subgraph Application [Episode 2: RAG Application]
+        User(("👤 User")) <-->|Chat UI| Frontend["💻 React Frontend"]
+        Frontend <-->|REST API| Backend["⚙️ Flask Backend"]
+        Backend <-->|Retrieve| FAISS
+        Backend <-->|Generate| LLM["🤖 GPT-4o"]
     end
-
-    classDef pipeline fill:#f9f,stroke:#333,stroke-width:2px;
-    classDef app fill:#bbf,stroke:#333,stroke-width:2px;
-    class DataPipeline pipeline;
-    class Application app;
 ```
 
-### 1. Data Pipeline (Scraper)
--   **Engine**: Custom Python 3.11 script using `crawl4ai` (Playwright).
--   **Function**: Crawls YellowPages Thailand to extract business names, addresses, and details.
--   **Output**: Structured `.csv` files ready for embedding.
+---
 
-### 2. The Brain (Backend)
--   **Core**: Flask API serving as the orchestrator.
--   **Intelligence**: LangChain manages the RAG flow.
-    -   **Router**: Decides if a user query is about "Sports", "Business Search", or "Chitchat".
-    -   **Retrieval**: Searches the FAISS vector database for relevant businesses.
-    -   **Synthesis**: Uses GPT-4o to generate a polite, human-like answer.
+## 🚀 Two Ways to Run This Project
 
-### 3. The Face (Frontend)
--   **Framework**: React + Vite (Fast & Modern).
--   **UI Library**: Tailwind CSS + Shadcn/UI for a premium, responsive look.
--   **Interaction**: Connects to the Backend via REST API.
+### Option 1: Production (Live Online) ⭐
 
+**What's Deployed:**
+- ✅ **Frontend**: Hosted on [Lovable.dev](https://lovable.dev)
+- ✅ **Backend**: Hosted on [Render.com](https://render.com)
 
-## 🚀 Deployment
+**Access:**
+1. Visit your Lovable frontend URL
+2. Frontend automatically connects to backend on Render
+3. Start chatting!
 
-### Railway (Recommended)
+**URLs:**
+- Frontend: `https://your-app.lovable.app` (replace with your URL)
+- Backend API: `https://yellowpages-chatbot-api.onrender.com`
 
-1.  **Repo Structure**: Ensure your repo matches this folder structure.
-2.  **Entry Point**: `run.py` (configured in `Procfile` as `run:app`).
-3.  **Environment Variables**:
-    *   `OPENAI_API_KEY`: Your OpenAI API Key.
+---
 
-The project is ready for one-click deployment on Railway using the included `Procfile`.
+### Option 2: Local Development (Your Computer) 💻
 
-### Render (Free Tier Alternative)
+Run both backend and frontend locally for testing and development.
 
-Render offers a generous free tier for web services.
+#### **Step 1: Setup Backend**
 
-1.  **Sign up**: Go to [render.com](https://render.com).
-2.  **New Web Service**: Connect your GitHub repository.
-3.  **Settings**:
-    *   **Runtime**: Python 3
-    *   **Build Command**: `pip install -r requirements.txt`
-    *   **Start Command**: `gunicorn run:app`
-4.  **Environment Variables**:
-    *   Add `OPENAI_API_KEY` in the "Environment" tab.
+1. **Clone Repository:**
+   ```bash
+   git clone https://github.com/MossMojito/web-scraping-Chatbot-RAG.git
+   cd web-scraping-Chatbot-RAG
+   ```
 
+2. **Create Virtual Environment:**
+   ```bash
+   python3 -m venv venv
+   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   ```
+
+3. **Install Dependencies:**
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+4. **Set Environment Variable:**
+   ```bash
+   export OPENAI_API_KEY=your-openai-api-key-here
+   # On Windows: set OPENAI_API_KEY=your-openai-api-key-here
+   ```
+
+5. **Run Backend:**
+   ```bash
+   python run.py
+   ```
+   Backend will run at: `http://localhost:5000`
+
+6. **Test Backend (Optional):**
+   ```bash
+   curl -X POST http://localhost:5000/chat \
+     -H "Content-Type: application/json" \
+     -d '{"message": "หาโยคะในกรุงเทพ"}'
+   ```
+
+#### **Step 2: Setup Frontend**
+
+1. **Navigate to Frontend:**
+   ```bash
+   cd frontend
+   ```
+
+2. **Install Dependencies:**
+   ```bash
+   npm install
+   # or
+   bun install
+   ```
+
+3. **Configure API URL:**
+   
+   Update the backend URL in your frontend code to point to localhost:
+   - Look for `API_URL` or similar configuration
+   - Change from `https://your-render-url.onrender.com` to `http://localhost:5000`
+
+4. **Run Frontend:**
+   ```bash
+   npm run dev
+   ```
+   Frontend will run at: `http://localhost:3000` (or similar)
+
+5. **Open Browser:**
+   Navigate to `http://localhost:3000` and start testing!
+
+---
 
 ## 📁 Project Structure
 
-```text
-.
-├── app/
-│   ├── api/                 # API Routes
-│   ├── agents/              # Intelligent Agents (Search, Knowledge, Router)
-│   ├── core/                # Configuration (Env vars, Constants)
-│   └── services/            # Integrations (LLM, VectorStore)
+```
+web-scraping-Chatbot-RAG/
+├── app/                    # Backend Flask application
+│   ├── api/               # REST API routes
+│   ├── agents/            # LangChain agents (Router, Search, Chat)
+│   ├── core/              # Configuration
+│   └── services/          # LLM and VectorStore integrations
+│
 ├── data/
-│   ├── raw/                 # Original Excel data
-│   └── vectorstore/         # FAISS Vector Index
-├── frontend/                # React/Lovable Frontend Application
-├── scraper/                 # (Ep 1) YellowPages Scraper
-├── run.py                   # Application Entry Point
-├── Procfile                 # Deployment Config
-└── requirements.txt         # Dependencies
+│   ├── raw/               # Scraped CSV files
+│   └── vectorstore/       # FAISS vector index
+│
+├── frontend/              # React frontend (generated by Lovable)
+│   ├── src/
+│   │   ├── components/   # UI components
+│   │   └── lib/          # Utilities
+│   └── package.json
+│
+├── scraper/               # YellowPages web scraper
+│
+├── run.py                 # Backend entry point
+├── Procfile              # Render deployment config
+├── render.yaml           # Render service config
+└── requirements.txt      # Python dependencies
 ```
 
-## 🛠️ Local Development
+---
 
-1.  **Create Virtual Environment** (Recommended):
-    ```bash
-    python3 -m venv venv
-    source venv/bin/activate
-    ```
+## 🚢 Deployment Guide
 
-2.  **Install Dependencies**:
-    ```bash
-    pip install -r requirements.txt
-    ```
+### Backend Deployment (Render)
 
-3.  **Run Application**:
-    ```bash
-    export OPENAI_API_KEY=your-key-here
-    python run.py
-    ```
+1. **Sign up** at [render.com](https://render.com)
+2. **New Web Service** → Connect your GitHub repository
+3. **Configure:**
+   - **Runtime**: Python 3
+   - **Build Command**: `pip install -r requirements.txt`
+   - **Start Command**: `gunicorn run:app`
+4. **Environment Variables:**
+   - Add `OPENAI_API_KEY` in Render dashboard
+5. **Deploy** → Render auto-deploys on every git push
 
-4.  **Test API**:
-    ```bash
-    curl -X POST http://localhost:5000/chat \
-      -H "Content-Type: application/json" \
-      -d '{"message": "หาโยคะในกรุงเทพ"}'
-    ```
+### Frontend Deployment (Lovable)
 
-## 💻 Frontend (React + Vite)
+The frontend was built using [Lovable.dev](https://lovable.dev), an AI-powered platform that generates React code.
 
-The frontend is located in the `frontend/` directory.
+**Option A: Deploy on Lovable (Recommended)**
+1. Import project to Lovable
+2. Configure backend API URL (your Render URL)
+3. One-click deploy
 
-1.  **Navigate to folder**:
-    ```bash
-    cd frontend
-    ```
-2.  **Install dependencies**:
-    ```bash
-    npm install
-    # or
-    bun install
-    ```
-3.  **Run Locally**:
-    ```bash
-    npm run dev
-    ```
-    The app will open at `http://localhost:3000` (or similar).
+**Option B: Deploy elsewhere (Vercel/Netlify)**
+1. Build: `npm run build` in `/frontend`
+2. Deploy the `dist` folder to Vercel/Netlify
 
-## 🕷️ Scraper (Episode 1)
+---
 
-The logic for collecting the data is in the `scraper/` directory.
-This enables the project to fetch fresh data from YellowPages to update the AI's knowledge base.
+## 🛠️ Tech Stack
 
-## 🚀 Deployment
+**Backend:**
+- Python 3.11
+- Flask (Web framework)
+- LangChain (RAG orchestration)
+- FAISS (Vector database)
+- OpenAI GPT-4o (LLM)
 
-### Backend (Render)
-Already configured via `render.yaml`. Connect your repo to Render and it will auto-deploy.
-- **Live URL**: `https://yellowpages-chatbot-api.onrender.com`
+**Frontend:**
+- React 18 + TypeScript
+- Vite (Build tool)
+- Tailwind CSS (Styling)
+- Shadcn/UI (Component library)
+- TanStack Query (API calls)
 
-### Frontend (Vercel/Netlify/Lovable)
-You can deploy the `frontend/` folder to Vercel, Netlify, or publish directly from Lovable.
+**Infrastructure:**
+- Render (Backend hosting)
+- Lovable (Frontend hosting)
+- GitHub (Version control)
+
+---
+
+## 🕷️ Scraper (Optional)
+
+To update the business data:
+
+1. Navigate to scraper directory:
+   ```bash
+   cd scraper
+   ```
+
+2. Run the scraper:
+   ```bash
+   python yellowpages_scraper.py
+   ```
+
+3. New data will be saved to `data/raw/`
+
+---
+
+## 📝 Environment Variables
+
+**Required:**
+- `OPENAI_API_KEY` - Your OpenAI API key for GPT-4o and embeddings
+
+**Optional:**
+- `FLASK_ENV` - Set to `development` or `production`
+- `PORT` - Port number (default: 5000)
+
+---
+
+## 🤝 Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+---
+
+## 📄 License
+
+This project is open source and available under the [MIT License](LICENSE).
+
+---
+
+## 🔗 Links
+
+- **Live Demo**: [Your Lovable URL]
+- **Backend API**: [Your Render URL]
+- **GitHub**: https://github.com/MossMojito/web-scraping-Chatbot-RAG
+
+---
+
+## 📧 Contact
+
+For questions or feedback, please open an issue on GitHub.
