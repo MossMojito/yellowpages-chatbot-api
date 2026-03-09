@@ -79,7 +79,8 @@ web-scraping-Chatbot-RAG/
 │   │   ├── __init__.py             # App factory + LangSmith init
 │   │   ├── api/routes.py           # REST endpoints (/, /health, /chat)
 │   │   ├── agents/
-│   │   │   ├── orchestrator.py     # Main pipeline @traceable
+│   │   │   ├── graph.py            # LangGraph StateGraph (Task 5) — nodes + edges
+│   │   │   ├── orchestrator.py     # Chatbot entrypoint — invokes chat_graph
 │   │   │   ├── router.py           # Intent classifier @traceable
 │   │   │   ├── search.py           # FAISS business search @traceable
 │   │   │   ├── knowledge.py        # Sports knowledge @traceable
