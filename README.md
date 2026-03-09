@@ -1,6 +1,6 @@
 # 🏋️ Yellow Pages Sports Chatbot
 
-A **production-grade, cloud-native AI chatbot** for finding Thai sports businesses. Built with Flask, LangChain multi-agent architecture, FAISS vector search, and GPT-4o. Deployed on **Google Kubernetes Engine (GKE)** with full **LangSmith observability**.
+A **production-grade, cloud-native AI chatbot** for finding Thai sports businesses. Built with Flask, **LangGraph** multi-agent orchestration, FAISS vector search, and GPT-4o. Deployed on **Google Kubernetes Engine (GKE)** with full **LangSmith observability**.
 
 > 🎯 Built as a portfolio project demonstrating **AI Integration Engineer** skills: RAG, multi-agent orchestration, containerization, Kubernetes, and observability.
 
@@ -79,7 +79,7 @@ web-scraping-Chatbot-RAG/
 │   │   ├── __init__.py             # App factory + LangSmith init
 │   │   ├── api/routes.py           # REST endpoints (/, /health, /chat)
 │   │   ├── agents/
-│   │   │   ├── graph.py            # LangGraph StateGraph (Task 5) — nodes + edges
+│   │   │   ├── graph.py            # LangGraph StateGraph — nodes, edges, conditional routing
 │   │   │   ├── orchestrator.py     # Chatbot entrypoint — invokes chat_graph
 │   │   │   ├── router.py           # Intent classifier @traceable
 │   │   │   ├── search.py           # FAISS business search @traceable

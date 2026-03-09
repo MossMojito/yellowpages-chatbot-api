@@ -5,7 +5,6 @@ from app.services.llm import llm
 def query_router(user_query: str, chat_history: str = "") -> str:
     """
     Agent that decides query type based on user intent.
-    Traced in LangSmith as 'Router — classify query'.
     """
     
     prompt = f"""You are a query classifier for a sports facility chatbot.
@@ -41,7 +40,6 @@ Return ONLY ONE WORD: business_search, sports_knowledge, or out_of_scope
 def out_of_scope_agent(query: str) -> str:
     """
     Agent that politely handles non-sports queries.
-    Traced in LangSmith as 'Agent — out of scope'.
     """
     
     prompt = f"""User asked something not related to sports: "{query}"

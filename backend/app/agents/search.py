@@ -4,8 +4,8 @@ from app.services.llm import llm, vectorstore
 @traceable(name="Agent — business search", run_type="retriever")
 def business_search_agent(query: str, chat_history: str = "") -> str:
     """
-    Conversational business search - talks like a human!
-    Traced in LangSmith as 'Agent — business search'.
+    Conversational business search — retrieves relevant businesses from FAISS
+    and generates a natural Thai-language response.
     """
     
     # Extract search context

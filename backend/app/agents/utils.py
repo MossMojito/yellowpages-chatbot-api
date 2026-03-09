@@ -5,7 +5,6 @@ from app.services.llm import llm
 def polish_response(raw_response: str, user_query: str, chat_history: str = "") -> str:
     """
     Makes responses more natural and conversational.
-    Traced in LangSmith as 'Agent — polish response'.
     """
     
     prompt = f"""You are a friendly sports facility assistant.

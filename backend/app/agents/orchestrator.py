@@ -1,5 +1,5 @@
 """
-orchestrator.py — Main chatbot entrypoint (Task 5: LangGraph upgrade)
+orchestrator.py — Main chatbot entrypoint
 
 The manual if/elif routing is replaced by invoking the LangGraph StateGraph
 defined in graph.py. The orchestrator now just:

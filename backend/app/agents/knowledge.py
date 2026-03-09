@@ -6,7 +6,6 @@ from app.agents.search import business_search_agent
 def sports_knowledge_agent(query: str, chat_history: str = "") -> str:
     """
     Agent that provides sports/fitness advice using LLM knowledge.
-    Traced in LangSmith as 'Agent — sports knowledge'.
     """
     
     prompt = f"""You are a knowledgeable female sports and fitness expert.
