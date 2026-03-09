@@ -1,59 +1,59 @@
+"""
+orchestrator.py — Main chatbot entrypoint (Task 5: LangGraph upgrade)
+
+The manual if/elif routing is replaced by invoking the LangGraph StateGraph
+defined in graph.py. The orchestrator now just:
+  1. Builds the initial state (user input + chat history)
+  2. Calls chat_graph.invoke(state)
+  3. Saves the result to memory
+  4. Returns the final response
+
+All agent logic and routing lives in graph.py.
+"""
+
 from langsmith import traceable
 from app.services.llm import get_memory, global_memory
-from app.agents.router import query_router, out_of_scope_agent
-from app.agents.search import business_search_agent
-from app.agents.knowledge import sports_knowledge_agent
-from app.agents.utils import polish_response
+from app.agents.graph import chat_graph
 
-@traceable(name="Chatbot — full pipeline", run_type="chain")
+
+@traceable(name="Chatbot — full pipeline (LangGraph)", run_type="chain")
 def chatbot(user_input: str) -> str:
     """
-    CONVERSATIONAL multi-agent chatbot - talks like a human!
-    Traced in LangSmith as 'Chatbot — full pipeline'.
-    Each agent call below becomes a child span in the LangSmith trace.
+    CONVERSATIONAL multi-agent chatbot powered by LangGraph.
+
+    The request flows through a StateGraph:
+        START → classify → (conditional) → agent_node → polish → END
+
+    Every node is a child span in LangSmith.
     """
 
-    # Get history from global SimpleMemory
+    # ── Build chat history from memory ────────────────────────────────────────
     history = global_memory.load_memory_variables({})
     chat_history = ""
-
-    if history.get('chat_history'):
-        for msg in history['chat_history']:
-            # SimpleMemory stores plain dicts: {"type": "human"/"ai", "content": "..."}
+    if history.get("chat_history"):
+        for msg in history["chat_history"]:
             chat_history += f"{msg['type']}: {msg['content']}\n"
 
     print(f"💭 User: {user_input}")
     print(f"🧠 Memory: {len(history.get('chat_history', []))} messages")
 
-    # Route query — traced as a child span
-    query_type = query_router(user_input, chat_history)
-    print(f"🎯 Route: {query_type}")
+    # ── Invoke the LangGraph ───────────────────────────────────────────────────
+    # The graph handles routing + agent selection + polish internally.
+    # We just supply the initial state and get the final state back.
+    final_state = chat_graph.invoke({
+        "user_input":   user_input,
+        "chat_history": chat_history,
+        "query_type":   "",   # will be set by classify_node
+        "response":     "",   # will be set by agent node + polish node
+    })
 
-    # Execute the appropriate agent — each is traced as a child span
-    if query_type == "business_search":
-        print("🔍 Agent: Business Search (Conversational RAG)")
-        response = business_search_agent(user_input, chat_history)
+    response = final_state["response"]
 
-    elif query_type == "sports_knowledge":
-        print("🧠 Agent: Sports Knowledge (LLM)")
-        response = sports_knowledge_agent(user_input, chat_history)
-
-    elif query_type == "out_of_scope":
-        print("⚠️ Agent: Out-of-Scope")
-        response = out_of_scope_agent(user_input)
-
-    else:
-        response = "I'm not sure how to help with that. Could you rephrase?"
-
-    # Polish response — traced as a child span
-    response = polish_response(response, user_input, chat_history)
-
-    # Save to memory
+    # ── Save result to sliding-window memory ──────────────────────────────────
     global_memory.save_context(
         {"input": user_input},
         {"output": response}
     )
-
     print("💾 Saved to memory")
     print("=" * 60)
 
