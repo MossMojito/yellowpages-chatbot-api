@@ -1,0 +1,72 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# frontend-deployment.yaml
+# Deploys the React (Vite) frontend (nginx) + exposes it via LoadBalancer port 80
+#
+# Image: built and pushed by scripts/deploy-gcp.sh
+# Dockerfile for frontend: frontend/Dockerfile (Task 2)
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── Deployment ────────────────────────────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  labels:
+    app: frontend
+spec:
+  replicas: 2                          # Run 2 instances for high availability
+  selector:
+    matchLabels:
+      app: frontend
+  template:
+    metadata:
+      labels:
+        app: frontend
+    spec:
+      containers:
+        - name: frontend
+          # Image pushed to Artifact Registry by deploy-gcp.sh
+          image: asia-southeast1-docker.pkg.dev/earnest-cooler-377009/yellowpages-chatbot/frontend:latest
+          ports:
+            - containerPort: 80        # nginx serves the built React app here
+
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "250m"
+              memory: "256Mi"
+
+          # Readiness probe: wait until nginx is serving before routing traffic
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 10
+            periodSeconds: 10
+
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 20
+            periodSeconds: 15
+
+---
+
+# ── Service (LoadBalancer) ────────────────────────────────────────────────────
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend-service
+  labels:
+    app: frontend
+spec:
+  type: LoadBalancer                   # GCP provisions an external IP
+  selector:
+    app: frontend
+  ports:
+    - protocol: TCP
+      port: 80                         # External and internal port both 80
+      targetPort: 80

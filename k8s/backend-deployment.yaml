@@ -1,0 +1,102 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# backend-deployment.yaml
+# Deploys the Flask/gunicorn backend + exposes it via a LoadBalancer on port 80
+#
+# Image: built and pushed by scripts/deploy-gcp.sh
+# Secret: create with `kubectl create secret generic app-secrets --from-literal=openai-api-key=YOUR_KEY`
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── Deployment ────────────────────────────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  labels:
+    app: backend
+spec:
+  replicas: 2                          # Run 2 instances for high availability
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      containers:
+        - name: backend
+          # Image pushed to Artifact Registry by deploy-gcp.sh
+          image: asia-southeast1-docker.pkg.dev/earnest-cooler-377009/yellowpages-chatbot/backend:latest
+          ports:
+            - containerPort: 5000      # gunicorn listens here inside the container
+
+          # Resource limits (Task 6 spec)
+          resources:
+            requests:
+              cpu: "250m"              # Guaranteed CPU at startup
+              memory: "256Mi"
+            limits:
+              cpu: "500m"              # Max CPU per pod
+              memory: "512Mi"          # Max memory per pod
+
+          # Inject secrets as environment variables — never hard-code API keys
+          env:
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets    # K8s secret name (created in deploy-gcp.sh)
+                  key: openai-api-key
+
+            - name: FLASK_ENV
+              value: "production"
+
+            - name: PORT
+              value: "5000"
+
+            # ── LangSmith Observability (Task 4) ────────────────────────────────
+            - name: LANGCHAIN_TRACING_V2
+              value: "true"
+
+            - name: LANGCHAIN_PROJECT
+              value: "yellowpages-chatbot"
+
+            - name: LANGCHAIN_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets    # Add langsmith-api-key to this secret
+                  key: langsmith-api-key
+                  optional: true       # Pod still starts if key is not yet set
+
+          # Liveness probe: restart pod if gunicorn crashes
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 5000
+            initialDelaySeconds: 60
+            periodSeconds: 30
+
+          # Readiness probe: only send traffic once the pod is ready
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 5000
+            initialDelaySeconds: 45
+            periodSeconds: 20
+
+---
+
+# ── Service (LoadBalancer) ────────────────────────────────────────────────────
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend-service
+  labels:
+    app: backend
+spec:
+  type: LoadBalancer                   # GCP creates an external IP automatically
+  selector:
+    app: backend
+  ports:
+    - protocol: TCP
+      port: 80                         # External port (what the internet hits)
+      targetPort: 5000                 # Internal port (gunicorn)

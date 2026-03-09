@@ -1,0 +1,12 @@
+flask
+flask-cors
+gunicorn
+openai
+langchain>=0.3.0
+langchain-community>=0.3.0
+langchain-openai>=0.2.0
+faiss-cpu
+numpy
+pandas
+tiktoken
+langsmith

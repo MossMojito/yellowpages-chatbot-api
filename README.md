@@ -1,51 +1,70 @@
-# Web Scraping Chatbot RAG
+# 🏋️ Yellow Pages Sports Chatbot
 
-A production-ready RAG (Retrieval-Augmented Generation) chatbot for searching Thai businesses. Built with Flask, LangChain, FAISS, and GPT-4o.
+A **production-grade, cloud-native AI chatbot** for finding Thai sports businesses. Built with Flask, LangChain multi-agent architecture, FAISS vector search, and GPT-4o. Deployed on **Google Kubernetes Engine (GKE)** with full **LangSmith observability**.
 
----
-
-## 🚀 Live Demo
-
-**Try it here:** https://chat-thai-sport.lovable.app
-
-**Note:** This is a demo deployment for portfolio purposes. For local setup and extended testing, see instructions below.
+> 🎯 Built as a portfolio project demonstrating **AI Integration Engineer** skills: RAG, multi-agent orchestration, containerization, Kubernetes, and observability.
 
 ---
 
-## 🏗️ System Architecture
+## 🚀 Live Endpoints (GKE — asia-southeast1)
 
-The project follows a modular **RAG architecture** split into three pipelines:
+| Service | URL |
+|---|---|
+| 💬 Frontend (React) | `http://34.87.8.226` |
+| ⚙️ Backend API | `http://34.126.130.198` |
+| ❤️ Health Check | `http://34.126.130.198/health` |
 
-### 1. Data Pipeline (Scraper)
-* **Engine**: Python 3.11 + Playwright (`crawl4ai`)
-* **Function**: Scrapes YellowPages Thailand for business data
-* **Output**: Structured CSV files → Vector embeddings → FAISS index
+---
 
-### 2. Backend (Flask + LangChain)
-* **Router Agent**: Classifies user intent (Business Search / Chitchat / Knowledge)
-* **RAG Engine**: Retrieves relevant businesses from FAISS, generates responses with GPT-4o
-* **Conversation Memory**: Maintains context across multiple messages
-* **API**: RESTful endpoints for frontend communication
+## 🏗️ Architecture
 
-### 3. Frontend (React + TypeScript)
-* **Built with**: [Lovable.dev](https://lovable.dev) - AI-powered frontend generator
-* **Stack**: React 18 + Vite + TypeScript + Tailwind CSS + Shadcn/UI
-* **Features**: Real-time chat, responsive design, premium UI components
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    GKE Cluster (asia-southeast1)                 │
+│                                                                  │
+│  ┌──────────────────┐   nginx proxy    ┌─────────────────────┐  │
+│  │  Frontend Pod ×2 │ ────/api/*────▶  │  Backend Pod ×2     │  │
+│  │  React + nginx   │                  │  Flask + gunicorn   │  │
+│  │  port: 80        │                  │  port: 5000         │  │
+│  └──────────────────┘                  └──────────┬──────────┘  │
+│         │                                         │              │
+│  LoadBalancer                            ┌────────▼────────┐    │
+│  34.87.8.226                             │  FAISS (3536 v) │    │
+│                                          │  + GPT-4o-mini  │    │
+│                                          │  + LangSmith    │    │
+│                                          └─────────────────┘    │
+└─────────────────────────────────────────────────────────────────┘
+```
 
-```mermaid
-graph TD
-    subgraph DataPipeline [Episode 1: Data Ingestion]
-        Scraper["🕷️ Scraper"] -->|Extracts| CSV["Business Data"]
-        CSV -->|Embeddings| FAISS[("🗄️ FAISS Vector DB")]
-    end
+### Multi-Agent Pipeline (per chat message)
 
-    subgraph Application [Episode 2: RAG Application]
-        User(("👤 User")) <-->|Chat UI| Frontend["💻 React Frontend"]
-        Frontend <-->|REST API| Backend["⚙️ Flask Backend"]
-        Backend <-->|Retrieve| FAISS
-        Backend <-->|Generate| LLM["🤖 GPT-4o"]
-        Backend <-->|Context| Memory[("💭 Conversation Memory")]
-    end
+```
+User Query
+    │
+    ▼
+┌──────────────────────────────────────────────────────────┐
+│  Chatbot Pipeline  [LangSmith traced]                    │
+│                                                          │
+│  1. Router Agent ──── classifies intent ──────────────┐  │
+│                                                        │  │
+│  2a. Business Search Agent                            │  │
+│      ├─ Extract location/sport context (LLM)          │  │
+│      ├─ FAISS similarity_search (k=5)                 │  │
+│      └─ Generate natural Thai response (LLM)  ◀───────┤  │
+│                                                        │  │
+│  2b. Sports Knowledge Agent                           │  │
+│      ├─ Expert advice response (LLM)          ◀───────┤  │
+│      └─ Optionally calls Business Search      ◀───────┘  │
+│                                                           │
+│  2c. Out-of-Scope Agent (decline politely)               │
+│                                                           │
+│  3. Polish Agent ──── make response warm+human (LLM)     │
+│                                                           │
+│  4. Save to SimpleMemory (sliding window, k=3 pairs)     │
+└──────────────────────────────────────────────────────────┘
+    │
+    ▼
+Response → Frontend
 ```
 
 ---
@@ -54,243 +73,241 @@ graph TD
 
 ```
 web-scraping-Chatbot-RAG/
-├── app/                    # Backend Flask application
-│   ├── api/               # REST API routes
-│   ├── agents/            # LangChain agents (Router, Search, Chat)
-│   ├── core/              # Configuration
-│   └── services/          # LLM and VectorStore integrations
 │
-├── data/
-│   ├── raw/               # Scraped CSV files
-│   └── vectorstore/       # FAISS vector index
+├── backend/                        # Flask backend (containerized)
+│   ├── app/
+│   │   ├── __init__.py             # App factory + LangSmith init
+│   │   ├── api/routes.py           # REST endpoints (/, /health, /chat)
+│   │   ├── agents/
+│   │   │   ├── orchestrator.py     # Main pipeline @traceable
+│   │   │   ├── router.py           # Intent classifier @traceable
+│   │   │   ├── search.py           # FAISS business search @traceable
+│   │   │   ├── knowledge.py        # Sports knowledge @traceable
+│   │   │   └── utils.py            # Response polish @traceable
+│   │   ├── core/config.py          # App configuration
+│   │   └── services/llm.py         # LLM, embeddings, vectorstore, memory
+│   ├── data/
+│   │   ├── raw/                    # Scraped Excel data
+│   │   └── vectorstore/            # FAISS index (3,536 vectors)
+│   ├── Dockerfile                  # python:3.11-slim + gunicorn
+│   ├── requirements.txt
+│   └── run.py                      # gunicorn entry point
 │
-├── frontend/              # React frontend (generated by Lovable)
-│   ├── src/
-│   │   ├── components/   # UI components
-│   │   └── lib/          # Utilities
+├── frontend/                       # React frontend (containerized)
+│   ├── src/                        # React + TypeScript + Shadcn/UI
+│   ├── Dockerfile                  # node:18-alpine build → nginx serve
+│   ├── nginx.conf                  # SPA routing + /api proxy
 │   └── package.json
 │
-├── scraper/               # YellowPages web scraper
+├── k8s/                            # Kubernetes manifests
+│   ├── backend-deployment.yaml     # 2 replicas, CPU/mem limits, secrets
+│   └── frontend-deployment.yaml    # 2 replicas, LoadBalancer port 80
 │
-├── run.py                 # Backend entry point
-├── Procfile              # Render deployment config
-├── render.yaml           # Render service config
-└── requirements.txt      # Python dependencies
+├── scripts/
+│   └── deploy-gcp.sh               # End-to-end GCP deploy script (7 steps)
+│
+├── scraper/                        # YellowPages web scraper
+├── .env.example                    # Environment variable template
+├── docker-compose.yml              # Local full-stack development
+└── README.md
 ```
 
 ---
 
-## 🛠️ Local Development
+## 🐳 Local Development with Docker
 
-### Prerequisites
-- Python 3.11+
-- Node.js 18+ (for frontend)
-- OpenAI API Key
+The fastest way to run the full stack locally:
 
-### Backend Setup
+```bash
+# 1. Copy and fill in environment variables
+cp .env.example .env
+# Edit .env with your OPENAI_API_KEY (and optionally LANGCHAIN_API_KEY)
 
-1. **Clone Repository:**
-   ```bash
-   git clone https://github.com/MossMojito/web-scraping-Chatbot-RAG.git
-   cd web-scraping-Chatbot-RAG
-   ```
+# 2. Start both services
+docker compose up
 
-2. **Create Virtual Environment:**
-   ```bash
-   python3 -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   ```
+# 3. Open the app
+open http://localhost:3000        # Frontend
+curl http://localhost:5000/health # Backend health check
+```
 
-3. **Install Dependencies:**
-   ```bash
-   pip install -r requirements.txt
-   ```
+**Or run services individually:**
 
-4. **Set Environment Variable:**
-   ```bash
-   export OPENAI_API_KEY=your-openai-api-key-here
-   # On Windows: set OPENAI_API_KEY=your-openai-api-key-here
-   ```
+```bash
+# Backend only
+docker build -t yellowpages-backend ./backend
+docker run --rm -p 5000:5000 -e OPENAI_API_KEY=sk-... yellowpages-backend
 
-5. **Run Backend:**
-   ```bash
-   python run.py
-   ```
-   Backend will run at: `http://localhost:5000`
-
-6. **Test Backend (Optional):**
-   ```bash
-   curl -X POST http://localhost:5000/chat \
-     -H "Content-Type: application/json" \
-     -d '{"message": "หาโยคะในกรุงเทพ"}'
-   ```
-
-### Frontend Setup
-
-1. **Navigate to Frontend:**
-   ```bash
-   cd frontend
-   ```
-
-2. **Install Dependencies:**
-   ```bash
-   npm install
-   # or
-   bun install
-   ```
-
-3. **Configure API URL:**
-   
-   Update the backend URL to point to localhost:
-   - Find the API configuration file (usually in `src/lib/` or similar)
-   - Change the API URL to `http://localhost:5000`
-
-4. **Run Frontend:**
-   ```bash
-   npm run dev
-   ```
-   Frontend will run at: `http://localhost:3000` (or shown in terminal)
-
-5. **Open Browser:**
-   Navigate to the localhost URL and start testing!
+# Frontend only
+docker build -t yellowpages-frontend ./frontend
+docker run --rm -p 3000:80 yellowpages-frontend
+```
 
 ---
 
-## 🚢 Deployment
+## 🧑‍💻 Local Development (without Docker)
 
-### Backend (Render)
+### Backend
 
-The backend is deployed on **Render.com** with automatic deployments from GitHub.
+```bash
+cd backend
+python3 -m venv venv && source venv/bin/activate
+pip install -r requirements.txt
 
-**Setup:**
-1. Connect GitHub repository to Render
-2. Render uses `Procfile` and `render.yaml` for configuration
-3. Add `OPENAI_API_KEY` environment variable in Render dashboard
-4. Auto-deploys on every git push to main branch
+export OPENAI_API_KEY=sk-...
+python run.py
+# → http://localhost:5000
+```
 
-### Frontend (Lovable)
+### Frontend
 
-The frontend was built using **Lovable.dev**, an AI-powered platform that generates production-ready React applications.
-
-**How it works:**
-- Lovable's AI generated the complete React + TypeScript application
-- One-click deployment included with Lovable platform
-- Updates can be made through Lovable's interface or by pushing code changes
-
-**Alternative deployment:**
-You can also deploy the frontend to Vercel or Netlify:
 ```bash
 cd frontend
-npm run build
-# Deploy the dist/ folder to your preferred platform
+npm install
+npm run dev
+# → http://localhost:3000
 ```
+
+---
+
+## ☁️ GCP Deployment
+
+### One-Command Deploy
+
+```bash
+export OPENAI_API_KEY="sk-..."
+bash scripts/deploy-gcp.sh
+```
+
+The script does **7 steps automatically**:
+
+| Step | Action |
+|---|---|
+| 1 | Set GCP project `earnest-cooler-377009` |
+| 2 | Enable `container` + `artifactregistry` APIs |
+| 3 | Create Artifact Registry repo `yellowpages-chatbot` in `asia-southeast1` |
+| 4 | `docker build` + `docker push` both images |
+| 5 | Create GKE Autopilot cluster `yellowpages-cluster` |
+| 6 | Create Kubernetes secret with `OPENAI_API_KEY` |
+| 7 | `kubectl apply` both deployment files |
+
+### Apply Changes After Code Update
+
+```bash
+# Rebuild and push backend
+docker buildx build --platform linux/amd64 \
+  -t asia-southeast1-docker.pkg.dev/earnest-cooler-377009/yellowpages-chatbot/backend:latest \
+  --push ./backend
+
+# Restart the deployment to pull new image
+kubectl rollout restart deployment/backend
+
+# Watch it roll out
+kubectl rollout status deployment/backend
+```
+
+---
+
+## 🔭 LangSmith Observability
+
+Every chat message is fully traced in the LangSmith dashboard — see each LLM call, agent decision, latency, and token cost.
+
+### Enable Tracing
+
+```bash
+# Add your LangSmith API key to the K8s secret
+kubectl patch secret app-secrets \
+  -p '{"stringData":{"langsmith-api-key":"ls__your_key_here"}}'
+
+kubectl rollout restart deployment/backend
+```
+
+Then go to **[smith.langchain.com](https://smith.langchain.com)** → project `yellowpages-chatbot`.
+
+### What You'll See Per Chat
+
+```
+Chatbot — full pipeline
+├── Router — classify query          (1 LLM call)
+├── Agent — business search
+│   ├── [LLM] extract context        (1 LLM call)
+│   ├── [FAISS] similarity_search    (vector lookup)
+│   └── [LLM] natural response       (1 LLM call)
+└── Agent — polish response          (1 LLM call)
+```
+
+---
+
+## 📋 Environment Variables
+
+Copy `.env.example` to `.env` and fill in your values:
+
+| Variable | Required | Description |
+|---|---|---|
+| `OPENAI_API_KEY` | ✅ Yes | OpenAI API key for GPT-4o-mini + embeddings |
+| `LANGCHAIN_TRACING_V2` | Optional | Set `true` to enable LangSmith tracing |
+| `LANGCHAIN_API_KEY` | Optional | LangSmith API key (from smith.langchain.com) |
+| `LANGCHAIN_PROJECT` | Optional | LangSmith project name (default: `yellowpages-chatbot`) |
+| `FLASK_ENV` | Optional | `production` or `development` (default: `production`) |
+| `PORT` | Optional | Backend port (default: `5000`) |
 
 ---
 
 ## 🛠️ Tech Stack
 
-**Backend:**
-- Python 3.11
-- Flask (Web framework)
-- LangChain (RAG orchestration)
-- FAISS (Vector database)
-- OpenAI GPT-4o (LLM)
-- OpenAI Embeddings (text-embedding-3-small)
-
-**Frontend:**
-- React 18 + TypeScript
-- Vite (Build tool)
-- Tailwind CSS (Styling)
-- Shadcn/UI (Component library)
-- TanStack Query (API calls)
-- Lucide React (Icons)
-
-**Infrastructure:**
-- Render (Backend hosting)
-- Lovable (Frontend hosting)
-- GitHub (Version control)
+| Layer | Technology |
+|---|---|
+| **LLM** | OpenAI GPT-4o-mini |
+| **Embeddings** | `text-embedding-3-small` |
+| **Vector DB** | FAISS (3,536 vectors) |
+| **Orchestration** | LangChain 0.3.x + custom agents |
+| **Observability** | LangSmith (`@traceable` on all agents) |
+| **Backend** | Flask + gunicorn |
+| **Frontend** | React 18 + Vite + TypeScript + Tailwind + Shadcn/UI |
+| **Containers** | Docker (multi-stage build for frontend) |
+| **Orchestration** | Kubernetes (GKE Autopilot) |
+| **Registry** | Google Artifact Registry |
+| **Cloud** | GCP — project `earnest-cooler-377009`, region `asia-southeast1` |
 
 ---
 
-## ✨ Key Features
+## 🔍 API Reference
 
-- 🔍 **Semantic Search** - Vector-based similarity search with FAISS
-- 🤖 **Intelligent Routing** - Classifies queries before processing
-- 💬 **Conversation Memory** - Maintains context across messages
-- 🇹🇭 **Thai Language Support** - Works with Thai and English
-- ⚡ **Real-time Responses** - Fast retrieval and generation
-- 📱 **Responsive Design** - Works on mobile and desktop
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/` | Service info + vectorstore size |
+| `GET` | `/health` | Health check (used by K8s probes) |
+| `POST` | `/chat` | Send a chat message |
 
----
-
-## 🕷️ Web Scraper (Optional)
-
-To update the business data with fresh information:
-
-1. Navigate to scraper directory:
-   ```bash
-   cd scraper
-   ```
-
-2. Run the scraper:
-   ```bash
-   python yellowpages_scraper.py
-   ```
-
-3. New data will be saved to `data/raw/`
-
-4. Re-run the embedding process to update the vector database
+**POST /chat**
+```bash
+curl -X POST http://34.126.130.198/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message": "หาโยคะในกรุงเทพ"}'
+```
+```json
+{"response": "หนูพบโยคะสตูดิโอที่น่าสนใจหลายแห่งค่ะ..."}
+```
 
 ---
 
-## 📝 Environment Variables
+## 🕷️ Updating Business Data
 
-**Required:**
-- `OPENAI_API_KEY` - Your OpenAI API key for GPT-4o and embeddings
-
-**Optional:**
-- `FLASK_ENV` - Set to `development` or `production`
-- `PORT` - Port number (default: 5000)
-
----
-
-## 🎯 How It Works
-
-1. **User sends a message** through the chat interface
-2. **Router Agent** classifies the intent (Business Search / Chitchat / Knowledge)
-3. **For business searches:**
-   - Query is converted to vector embedding
-   - FAISS retrieves top-5 most relevant businesses
-   - GPT-4o synthesizes a natural response with the retrieved data
-4. **Conversation memory** tracks context for follow-up questions
-5. **Response** is displayed in the chat interface
-
----
-
-## 🤝 Contributing
-
-This is a portfolio project, but suggestions and feedback are welcome! Feel free to open an issue if you have ideas for improvements.
-
----
-
-## 📄 License
-
-This project is open source and available under the [MIT License](LICENSE).
+```bash
+cd scraper
+python yellowpages_scraper.py
+# → saves to data/raw/
+# Then re-run embedding script to refresh FAISS index
+```
 
 ---
 
 ## 🔗 Links
 
-- **Live Demo**: https://your-app.lovable.app
-- **GitHub**: https://github.com/MossMojito/web-scraping-Chatbot-RAG
-- **Blog Post**: [Link to your Medium article]
+- **GitHub**: [MossMojito/web-scraping-Chatbot-RAG](https://github.com/MossMojito/web-scraping-Chatbot-RAG)
+- **Live Demo**: [chat-thai-sport.lovable.app](https://chat-thai-sport.lovable.app)
+- **LangSmith**: [smith.langchain.com](https://smith.langchain.com) → project `yellowpages-chatbot`
 
 ---
 
-## 📧 Contact
-
-For questions or collaboration opportunities, please open an issue on GitHub or reach out via [your contact method].
-
----
-
-**Built with ❤️ using Flask, LangChain, and GPT-4o**
+**Built with Flask · LangChain · FAISS · GPT-4o · Docker · Kubernetes · LangSmith**
