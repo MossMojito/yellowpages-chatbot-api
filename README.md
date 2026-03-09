@@ -305,7 +305,7 @@ python yellowpages_scraper.py
 ## 🔗 Links
 
 - **GitHub**: [MossMojito/web-scraping-Chatbot-RAG](https://github.com/MossMojito/web-scraping-Chatbot-RAG)
-- **Live Demo**: [chat-thai-sport.lovable.app](https://chat-thai-sport.lovable.app)
+- **Live Demo**: [http://34.87.8.226](http://34.87.8.226) (GKE — always on)
 - **LangSmith**: [smith.langchain.com](https://smith.langchain.com) → project `yellowpages-chatbot`
 
 ---
